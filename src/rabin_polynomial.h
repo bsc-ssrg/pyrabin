@@ -85,7 +85,7 @@ struct rab_block_info {
 
 typedef void (*block_reached_func)(struct rabin_polynomial* result, void* user);
 
-int initialize_rabin_polynomial_defaults();
+int initialize_rabin_polynomial_defaults(void);
 struct rab_block_info *read_rabin_block(void *buf, ssize_t size, struct rab_block_info *cur_block, block_reached_func callback, void* user);
 
 void change_average_rabin_block_size(int increment_mode);

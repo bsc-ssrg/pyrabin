@@ -79,7 +79,7 @@ void print_rabin_poly_to_file(FILE *out_file, struct rabin_polynomial *poly, int
   if (poly == NULL)
     return;
 
-  fprintf(out_file, "%llu,%u %llu", poly->start, poly->length, poly->polynomial);
+  fprintf(out_file, "%llu,%u %llu", (long long unsigned int)poly->start, poly->length, (long long unsigned int)poly->polynomial);
 
   if (new_line)
     fprintf(out_file, "\n");
@@ -133,6 +133,7 @@ void change_average_rabin_block_size(int increment_mode)
 /**
  * Initalizes the algorithm with the provided paramters
  */
+static int initialize_rabin_polynomial(uint64_t prime, unsigned max_size, unsigned int min_size, unsigned int average_block_size) __attribute__ ((unused));
 static int initialize_rabin_polynomial(uint64_t prime, unsigned max_size, unsigned int min_size, unsigned int average_block_size)
 {
   rabin_polynomial_prime = prime;
@@ -261,7 +262,7 @@ struct rabin_polynomial *get_file_rabin_polys(FILE *file_to_read) {
 /**
  * Allocates an empty block
  */
-struct rab_block_info *init_empty_block() {
+struct rab_block_info *init_empty_block(void) {
   initialize_rabin_polynomial_defaults();
   struct rab_block_info *block = malloc(sizeof(struct rab_block_info));
   if (block == NULL) {

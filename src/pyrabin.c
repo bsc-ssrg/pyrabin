@@ -40,6 +40,8 @@ extern unsigned int rabin_polynomial_max_block_size;
 extern unsigned int rabin_polynomial_min_block_size;
 extern unsigned int rabin_polynomial_average_block_size;
 
+static PyObject * error_out(PyObject *m);
+
 static PyObject* set_prime(PyObject* self, PyObject* args)
 {
   if (!PyArg_ParseTuple(args, "K", &rabin_polynomial_prime)) {
@@ -94,7 +96,7 @@ static PyObject* set_average_block_size(PyObject* self, PyObject* args)
   return Py_None;
 }
 
-static void to_hex_digest(char* digest, char* hex_digest)
+static void to_hex_digest(unsigned char* digest, char* hex_digest)
 {
   int i, j;
   for(i = j = 0; i < SHA_DIGEST_LENGTH; ++i) {
@@ -157,7 +159,7 @@ static PyObject* split_file_by_fingerprints(PyObject* self, PyObject* args)
   char* buffer = malloc(READ_BUF_SIZE);
   uint64_t offset = 0;
   size_t read_size = 0;
-  char digest[SHA_DIGEST_LENGTH];
+  unsigned char digest[SHA_DIGEST_LENGTH];
   char hex_digest[SHA_DIGEST_LENGTH * 2 + 5];
   SHA_CTX ctx;
 
@@ -175,7 +177,7 @@ static PyObject* split_file_by_fingerprints(PyObject* self, PyObject* args)
     }
 
     /* Save chunk to temporarily file */
-    snprintf(outfile, BUFSIZ, ".%x.tmp", curr->polynomial);
+    snprintf(outfile, BUFSIZ, ".%x.tmp", (unsigned int)curr->polynomial);
     SHA1_Init(&ctx);
     FILE* ofp = fopen(outfile, "wb");
     if (!ofp) {
@@ -227,6 +229,30 @@ static PyObject* split_file_by_fingerprints(PyObject* self, PyObject* args)
   return list;
 }
 
+
+struct module_state {
+    PyObject *error;
+};
+
+#if PY_MAJOR_VERSION >= 3
+
+#define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+
+#else /* PY_MAJOR_VERSION < 3 */
+
+#define GETSTATE(m) (&_state)
+static struct module_state _state;
+
+#endif /* PY_MAJOR_VERSION < 3 */
+
+static PyObject *
+error_out(PyObject *m) {
+    struct module_state *st = GETSTATE(m);
+    PyErr_SetString(st->error, "something bad happened");
+    return NULL;
+}
+
+
 static PyMethodDef PyRabinMethods[] = {
   {"set_prime", (PyCFunction)set_prime,
     METH_VARARGS, "Set Rabin polynomial prime"},
@@ -244,14 +270,55 @@ static PyMethodDef PyRabinMethods[] = {
     METH_VARARGS, "Get Rabin fingerprint of a file"},
   {"split_file_by_fingerprints", (PyCFunction)split_file_by_fingerprints,
     METH_VARARGS, "Split a file by fingerprints"},
+  {"error_out", (PyCFunction)error_out, METH_NOARGS, NULL},
   {NULL, NULL, 0, NULL}
 };
 
+#if PY_MAJOR_VERSION >= 3
 
-PyMODINIT_FUNC initrabin(void) {
+static int PyRabinTraverse(PyObject *m, visitproc visit, void *arg) {
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int PyRabinClear(PyObject *m) {
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "rabin",
+        NULL,
+        sizeof(struct module_state),
+        PyRabinMethods,
+        NULL,
+        PyRabinTraverse,
+        PyRabinClear,
+        NULL
+};
+
+#define INITERROR return NULL
+
+PyMODINIT_FUNC PyInit_rabin(void) {
+
+#else /* PY_MAJOR_VERSION < 3 */
+
+#define INITERROR return
+void initrabin(void) {
+
+#endif /* PY_MAJOR_VERSION < 3 */
+
+#if PY_MAJOR_VERSION >= 3
+  PyObject* m = PyModule_Create(&moduledef);
+#else /* PY_MAJOR_VERSION < 3 */
   PyObject* m = Py_InitModule("rabin", PyRabinMethods);
+#endif /* PY_MAJOR_VERSION < 3 */
+    
+
   if (m == NULL) {
-    return;
+    INITERROR;
   }
 
   // Initialize defaults
@@ -259,13 +326,29 @@ PyMODINIT_FUNC initrabin(void) {
 
   // Initialize rabin.Rabin
   if (PyType_Ready(&RabinType) < 0) {
-    fprintf(stderr, "Invalid PyTypeObject `RabinType'\n");
-    return;
+    //fprintf(stderr, "Invalid PyTypeObject `RabinType'\n");
+    INITERROR;
   }
 
   Py_INCREF(&RabinType);
   PyModule_AddObject(m, "Rabin", (PyObject*)&RabinType);
 
   // Initialize RabinError
-  RabinError = PyErr_NewException("rabin.error", NULL, NULL);
+  struct module_state *st = GETSTATE(m);
+
+  RabinError = PyErr_NewException("rabin.Error", NULL, NULL);
+
+  if(RabinError == NULL){
+      Py_DECREF(m);
+  }
+
+  st->error = RabinError;
+
+  Py_INCREF(RabinError);
+  PyModule_AddObject(m, "error", RabinError);
+
+
+#if PY_MAJOR_VERSION >= 3
+  return m;
+#endif
 }

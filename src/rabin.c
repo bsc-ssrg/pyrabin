@@ -65,8 +65,6 @@ Rabin_dealloc(Rabin* self)
 static PyObject*
 Rabin_register(Rabin* self, PyObject* args)
 {
-  const char* src_data;
-  int src_len;
   PyObject* temp;
 
   if (!PyArg_ParseTuple(args, "O:callback", &temp)) {
@@ -144,8 +142,12 @@ static PyMethodDef Rabin_methods[] = {
 };
 
 PyTypeObject RabinType = {
+#if PY_MAJOR_VERSION >= 3
+  PyVarObject_HEAD_INIT(NULL, 0)
+#else
   PyObject_HEAD_INIT(NULL)
   0,                         /*ob_size*/
+#endif
   "rabin.Rabin",             /*tp_name*/
   sizeof(Rabin),             /*tp_basicsize*/
   0,                         /*tp_itemsize*/
